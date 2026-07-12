@@ -1,0 +1,14 @@
+{
+  "name": "Minhas despesas",
+  "short_name": "Despesas",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F6F7F4",
+  "theme_color": "#2F7A55",
+  "icons": [
+    { "src": "icone.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
