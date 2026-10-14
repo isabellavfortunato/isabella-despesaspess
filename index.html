@@ -329,7 +329,7 @@ function visible(){
 }
 
 function buildMonths(){
-  const set=[...new Set(DADOS.map(t=>t.data.slice(0,7)))].sort();
+  const set=[...new Set(DADOS.map(t=>t.data.slice(0,7)))].sort().reverse();
   if(mes==="todos"&&set.length)mes=set[0];
   const c=document.getElementById("segmes");
   c.innerHTML="";
