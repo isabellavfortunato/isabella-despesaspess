@@ -159,6 +159,14 @@
   .ignora-linha{margin-top:10px}
   .btn-ignora{font-family:inherit;font-size:12px;font-weight:600;color:var(--clay);background:transparent;border:1px solid var(--line);border-radius:999px;padding:5px 12px;cursor:pointer}
   .btn-ignora:hover{background:var(--line-soft)}
+
+  .fat-tabela-wrap{margin-top:12px;max-height:360px;overflow:auto;border:1px solid var(--line-soft);border-radius:10px}
+  .fat-tabela{width:100%;border-collapse:collapse;font-size:12.5px}
+  .fat-tabela th{position:sticky;top:0;background:var(--paper);text-align:left;padding:8px 10px;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);font-weight:600;border-bottom:1px solid var(--line-soft)}
+  .fat-tabela td{padding:7px 10px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+  .fat-tabela tr:last-child td{border-bottom:none}
+  .rec-ok{color:var(--green);font-weight:600}
+  .rec-alerta{color:var(--clay);font-weight:600}
 </style>
 </head>
 <body>
@@ -170,13 +178,13 @@
   </header>
 
   <section class="importar" id="importar">
-    <div class="imp-titulo">Importar extrato do PicPay</div>
-    <div class="imp-sub">Solte aqui o arquivo CSV do extrato, ou toque para escolher no seu aparelho. Os lançamentos entram já classificados pelas suas regras, e você confere o resumo antes de confirmar. Nada é gravado sem a sua confirmação.</div>
+    <div class="imp-titulo">Importar extrato e faturas</div>
+    <div class="imp-sub">Solte o extrato do PicPay em CSV ou a fatura de cartão em PDF (Mercado Pago ou Porto). Os lançamentos entram já classificados pelas suas regras, e você confere o resumo contra o total da fatura antes de confirmar. Nada é gravado sem a sua confirmação.</div>
     <label class="dropzone" id="dropzone">
-      <input type="file" id="file-extrato" accept=".csv,text/csv" hidden>
+      <input type="file" id="file-extrato" accept=".csv,.pdf" hidden>
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4m0 0 4 4m-4-4L8 8"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-      <span class="dz-txt">Solte o CSV aqui ou toque para escolher</span>
-      <span class="dz-sub">Extrato do PicPay no formato CSV</span>
+      <span class="dz-txt">Solte o CSV ou a fatura em PDF aqui, ou toque para escolher</span>
+      <span class="dz-sub">Extrato do PicPay em CSV, ou fatura do Mercado Pago ou da Porto em PDF</span>
     </label>
     <div class="imp-preview" id="imp-preview" hidden></div>
   </section>
@@ -749,6 +757,8 @@ function bindImport(){
   if(!inp||!dz)return;
   function lerArquivo(file){
     if(!file)return;
+    const nome=(file.name||"").toLowerCase();
+    if(nome.endsWith(".pdf")||file.type==="application/pdf"){ lerFaturaPdf(file); return; }
     const r=new FileReader();
     r.onload=e=>{ renderPreviewImport(lerCSV(String(e.target.result))); };
     r.readAsText(file,"utf-8");
@@ -757,6 +767,164 @@ function bindImport(){
   ["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("over");}));
   ["dragleave","dragend","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("over");}));
   dz.addEventListener("drop",e=>{const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];lerArquivo(f);});
+}
+
+/* ---------- Leitura de fatura em PDF ---------- */
+const PDFJS_URL="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+const PDFJS_WORKER="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+let _pdfjsP=null;
+function carregarPdfJs(){
+  if(window.pdfjsLib){try{window.pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;}catch(e){}return Promise.resolve(window.pdfjsLib);}
+  if(_pdfjsP)return _pdfjsP;
+  _pdfjsP=new Promise((res,rej)=>{
+    const s=document.createElement("script");s.src=PDFJS_URL;
+    s.onload=()=>{try{window.pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;}catch(e){}res(window.pdfjsLib);};
+    s.onerror=()=>rej(new Error("Não consegui carregar o leitor de PDF. Confira a conexão."));
+    document.head.appendChild(s);
+  });
+  return _pdfjsP;
+}
+async function extrairLinhasPdf(file){
+  const lib=await carregarPdfJs();
+  const buf=await file.arrayBuffer();
+  const doc=await lib.getDocument({data:new Uint8Array(buf)}).promise;
+  const linhas=[];
+  for(let p=1;p<=doc.numPages;p++){
+    const page=await doc.getPage(p);const tc=await page.getTextContent();
+    const byY={};
+    for(const it of tc.items){if(!it.str)continue;const y=Math.round(it.transform[5]);(byY[y]=byY[y]||[]).push({x:it.transform[4],s:it.str});}
+    const ys=Object.keys(byY).map(Number).sort((a,b)=>b-a);
+    for(const y of ys){
+      const parts=byY[y].sort((a,b)=>a.x-b.x);let line="",le=null;
+      for(const pt of parts){if(le!==null&&pt.x-le>8)line+="   ";else if(line&&!line.endsWith(" "))line+=" ";line+=pt.s;le=pt.x+pt.s.length*4;}
+      linhas.push(line.replace(/\s+/g," ").trim());
+    }
+  }
+  return linhas;
+}
+function _num(s){return parseFloat(String(s).replace(/\./g,"").replace(",","."));}
+function detectarEmissor(L){const t=L.join("\n").toLowerCase();if(t.includes("cartão visa")||t.includes("mercado pago"))return "mp";if(t.includes("lançamentos: compras e saques")||t.includes("cartaoportoseguro")||t.includes("cartão porto"))return "porto";return "";}
+function mesDaFatura(L){
+  const t=L.join("\n");
+  let m=t.match(/venc(?:e(?:\s+em)?|imento)[:\s]*\n?\s*(\d{2})\/(\d{2})\/(\d{4})/i);
+  if(m)return m[3]+"-"+m[2];
+  m=t.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  return m?m[3]+"-"+m[2]:null;
+}
+function _limpaDesc(desc){
+  return desc.replace(/^Compra internacional em\s+/i,"").replace(/^(EBN|DL|HTM)\s*\*?\s*/i,"").replace(/\s+Parcela\s+\d+\s+de\s+\d+/i,"").trim();
+}
+function parseFaturaMP(L){
+  const compras=[];let inCard=false;let cartao="9509";
+  const re=/^(\d{2})\/(\d{2})\s+(.+?)\s+R\$\s*([\d.]+,\d{2})$/;
+  for(const ln of L){
+    const mc=ln.match(/Cartão Visa\s*\[\**(\d+)\]/i);if(mc){inCard=true;cartao=mc[1];continue;}
+    if(/^Cartão Visa/i.test(ln)){inCard=true;continue;}
+    if(inCard&&/^Total\s+R\$/i.test(ln)){inCard=false;continue;}
+    if(!inCard)continue;
+    const m=ln.match(re);if(m){const d=m[3].trim();if(/^(USD|BRL)\b/.test(d))continue;
+      compras.push({dd:m[1],desc:_limpaDesc(d),val:_num(m[4]),cartao,int:/internacional/i.test(d)});}
+  }
+  let alvo=null;for(const ln of L){const m=ln.match(/Consumos de .*?R\$\s*([\d.]+,\d{2})/);if(m){alvo=_num(m[1]);break;}}
+  const soma=compras.reduce((a,c)=>a+c.val,0);
+  return {emissor:"mp",origem:"Fatura Mercado Pago",compras,alvo,soma,gross:soma,estornos:0,reconcilia:alvo!=null&&Math.abs(soma-alvo)<0.01};
+}
+function parseFaturaPorto(L){
+  let sec=null,card=null;const all=[];let desp=null;
+  const reN=/^(\d{2})\/(\d{2})\s+(.+?)\s+(-?[\d.]+,\d{2})$/, reI=/^(\d{2})\/(\d{2})\s+(.+?)\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})$/;
+  for(const ln of L){
+    const md=ln.match(/Despesas\/débitos \(\+\) R\$ ([\d.]+,\d{2})/);if(md&&desp===null)desp=_num(md[1]);
+    if(/Lançamentos: compras e saques/i.test(ln)){sec="nac";continue;}
+    if(/Lançamentos Internacionais/i.test(ln)){sec="int";continue;}
+    if(/Detalhamento geral|Encargos Financeiros/i.test(ln))sec=null;
+    const mc=ln.match(/\(final \*(\d+)\)/);if(mc&&/Isabella/i.test(ln)){card=mc[1];continue;}
+    if(/^Lançamentos no cartão/i.test(ln))continue;
+    if(sec==="nac"){const m=ln.match(reN);if(m){const d=m[3].trim();if(!/PAGAMENTO/i.test(d))all.push({dd:m[1],desc:_limpaDesc(d),val:_num(m[4]),cartao:card,int:false});}}
+    else if(sec==="int"){const m=ln.match(reI);if(m)all.push({dd:m[1],desc:_limpaDesc(m[3].trim()),val:_num(m[5]),cartao:card,int:true});}
+  }
+  const rem=all.map(()=>false);
+  for(let i=0;i<all.length;i++)if(all[i].val<0&&!rem[i])for(let j=0;j<all.length;j++)if(!rem[j]&&all[j].val>0&&Math.abs(all[j].val+all[i].val)<0.01&&all[j].desc.slice(0,8)===all[i].desc.slice(0,8)){rem[i]=rem[j]=true;break;}
+  const net=all.filter((_,i)=>!rem[i]);
+  const gross=all.filter(c=>c.val>0).reduce((a,c)=>a+c.val,0);
+  const soma=net.reduce((a,c)=>a+c.val,0);
+  return {emissor:"porto",origem:"Fatura Porto",compras:net,alvo:desp,soma,gross,estornos:rem.filter(Boolean).length/2,reconcilia:desp!=null&&Math.abs(gross-desp)<0.01};
+}
+function construirItensFatura(res,mes){
+  const [yy,mm]=mes.split("-");const ult=new Date(yy,parseInt(mm,10),0).getDate();
+  return res.compras.map(c=>{
+    const dia=Math.min(Math.max(parseInt(c.dd,10)||1,1),ult);
+    const destino=c.desc+(c.int?" (internacional)":"");
+    const t={data:`${yy}-${mm}-${String(dia).padStart(2,"0")}`,hora:"",tipo:"Cartão de crédito",
+      destino,valor:Math.round(-Math.abs(c.val)*100)/100,forma:"",fonte:"Cartão",origem:res.origem,cartao:c.cartao||""};
+    t._cat=autoCatImport(t);
+    return t;
+  });
+}
+function renderPreviewFatura(res,mes){
+  const box=document.getElementById("imp-preview");box.hidden=false;
+  if(!res||!res.compras){box.innerHTML='<div class="imp-msg">Não reconheci esta fatura. Ela é do Mercado Pago ou da Porto?</div>';return;}
+  const itens=construirItensFatura(res,mes);
+  const total=itens.reduce((a,t)=>a+Math.abs(t.valor),0);
+  const semcat=itens.filter(t=>!t._cat).length;
+  const alvoTxt=res.alvo!=null?money(res.alvo):"não encontrado";
+  const estornoVal=(res.alvo!=null&&res.estornos)?Math.round((res.alvo-total)*100)/100:0;
+  const notaRec=(res.estornos&&res.alvo!=null)?`<div class="imp-msg" style="margin-top:6px">A fatura informa ${money(res.alvo)} de despesas. Anulei ${money(estornoVal)} de estorno em par, sobrando ${money(total)} de compras de verdade.</div>`:"";
+  const confBadge=res.reconcilia
+    ? `<span class="rec-ok">confere com a fatura</span>`
+    : `<span class="rec-alerta">confira: a soma não bateu com a fatura</span>`;
+  const linhas=itens.map((t,i)=>`<tr>
+      <td><input type="checkbox" class="fat-chk" data-i="${i}" checked></td>
+      <td class="tnum">${fmtDate(t.data)}</td>
+      <td>${esc(t.destino)}</td>
+      <td>${esc(t.cartao||"")}</td>
+      <td class="tnum">${money(t.valor)}</td>
+      <td>${t._cat?`<span class="chip" style="background:${colorFor(t._cat)}1F;color:${colorFor(t._cat)}">${esc(t._cat)}</span>`:'<span style="color:var(--faint)">sem categoria</span>'}</td>
+    </tr>`).join("");
+  box.innerHTML=`
+    <div class="imp-msg">Li a fatura ${res.emissor==="mp"?"do Mercado Pago":"da Porto"} e encontrei ${itens.length} ${itens.length===1?"compra":"compras"}${res.estornos?`, já anulando ${res.estornos} ${res.estornos===1?"estorno":"estornos"} em par`:""}. Vão entrar no mês de ${mesLabel(mes)}.</div>
+    <div class="imp-cards">
+      <div class="imp-card"><div class="k">Compras</div><div class="v">${money(total)}</div><div class="s">${itens.length} lançamentos</div></div>
+      <div class="imp-card"><div class="k">Total da fatura</div><div class="v">${alvoTxt}</div><div class="s">${confBadge}</div></div>
+      <div class="imp-card"><div class="k">Já categorizadas</div><div class="v">${itens.length-semcat} de ${itens.length}</div><div class="s">pelas suas regras</div></div>
+    </div>
+    ${notaRec}
+    <div class="fat-tabela-wrap"><table class="fat-tabela"><thead><tr><th></th><th>Data</th><th>Estabelecimento</th><th>Cartão</th><th>Valor</th><th>Categoria</th></tr></thead><tbody>${linhas}</tbody></table></div>
+    <div class="imp-acoes">
+      <button class="btn primary" id="fat-confirmar">Confirmar importação</button>
+      <button class="btn" id="fat-cancelar">Cancelar</button>
+    </div>`;
+  const incluir=itens.map(()=>true);
+  box.querySelectorAll(".fat-chk").forEach(c=>c.addEventListener("change",e=>{incluir[+c.dataset.i]=c.checked;}));
+  document.getElementById("fat-confirmar").addEventListener("click",()=>{
+    const escolhidos=itens.filter((_,i)=>incluir[i]);
+    confirmarFatura(escolhidos,mes);
+  });
+  document.getElementById("fat-cancelar").addEventListener("click",()=>{box.hidden=true;box.innerHTML="";document.getElementById("file-extrato").value="";});
+}
+function confirmarFatura(itens,mes){
+  const existentes=new Set(DADOS_RAW.concat(store.importados||[]).map(exKey));
+  let add=0;
+  itens.forEach(t=>{
+    const item={data:t.data,hora:t.hora,tipo:t.tipo,destino:t.destino,valor:t.valor,forma:t.forma,fonte:t.fonte,origem:t.origem,cartao:t.cartao};
+    if(existentes.has(exKey(item)))return;
+    store.importados.push(item);existentes.add(exKey(item));add++;
+    if(t._cat&&!store.cats[txid(item)])store.cats[txid(item)]=t._cat;
+  });
+  save();rebuildDados();aplicarAprendido();mes=mes;buildMonths();renderAll();
+  const box=document.getElementById("imp-preview");
+  box.innerHTML=`<div class="imp-msg">Pronto. ${add} ${add===1?"compra entrou":"compras entraram"} no mês de ${mesLabel(mes)}. Confira as categorias e marque o que precisar.</div>`;
+  document.getElementById("file-extrato").value="";
+}
+async function lerFaturaPdf(file){
+  const box=document.getElementById("imp-preview");box.hidden=false;box.innerHTML='<div class="imp-msg">Lendo a fatura, um instante…</div>';
+  try{
+    const L=await extrairLinhasPdf(file);
+    const emissor=detectarEmissor(L);
+    if(!emissor){box.innerHTML='<div class="imp-msg">Não reconheci esta fatura. Por enquanto a leitura cobre as faturas do Mercado Pago e da Porto.</div>';return;}
+    const mes=mesDaFatura(L)||("2026-"+String(new Date().getMonth()+1).padStart(2,"0"));
+    const res=emissor==="mp"?parseFaturaMP(L):parseFaturaPorto(L);
+    renderPreviewFatura(res,mes);
+  }catch(e){box.innerHTML='<div class="imp-msg">'+esc(e.message||"Não consegui ler esta fatura.")+'</div>';}
 }
 
 (async function(){await load();rebuildDados();aplicarAprendido();buildMonths();updateSort();bindImport();renderAll();})();
