@@ -224,6 +224,12 @@
     <button class="btn primary" id="export">Exportar CSV</button>
   </div>
 
+  <section class="totals">
+    <h2>Totais por categoria</h2>
+    <div class="pie-wrap" id="pie-wrap"></div>
+    <div class="catgrid" id="catgrid"></div>
+  </section>
+
   <div class="list">
     <div class="listhead" id="listhead">
       <button class="hd" data-campo="data">Data <span class="ar"></span></button>
@@ -238,9 +244,6 @@
   <div class="empty-state" id="empty" style="display:none">Nenhum lançamento com esse filtro.</div>
 
   <section class="totals">
-    <h2>Totais por categoria</h2>
-    <div class="pie-wrap" id="pie-wrap"></div>
-    <div class="catgrid" id="catgrid"></div>
     <div class="addcat">
       <input id="newcat" type="text" placeholder="Criar uma categoria nova" maxlength="28">
       <button class="btn" id="addcat">Adicionar categoria</button>
