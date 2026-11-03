@@ -34,7 +34,11 @@
   h1{font-family:'Spectral',Georgia,serif;font-weight:600;font-size:30px;line-height:1.1;letter-spacing:-.01em}
   .sub{color:var(--muted);margin-top:6px;font-size:13.5px}
 
-  .months{display:flex;align-items:center;gap:10px;margin:16px 0 4px}
+  .months{display:flex;align-items:center;gap:10px;margin:16px 0 4px;flex-wrap:wrap}
+  .dz-mini{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--green);background:var(--surface);border:1px dashed var(--line);border-radius:999px;padding:7px 14px;cursor:pointer;white-space:nowrap;transition:border-color .15s ease,background .15s ease}
+  .dz-mini:hover,.dz-mini.over{border-color:var(--green);background:rgba(47,122,85,.07)}
+  .dz-mini svg{width:16px;height:16px;flex:none}
+  @media(max-width:560px){.dz-mini{margin-left:0;width:100%;justify-content:center}}
   .months .lbl{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);font-weight:600}
   .segmes{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:3px;gap:2px}
   .segmes button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:550;padding:8px 16px;border-radius:9px;cursor:pointer;transition:.15s}
@@ -156,7 +160,7 @@
   .dropzone:hover,.dropzone.over{border-color:var(--green);background:rgba(47,122,85,.05);color:var(--ink)}
   .dz-txt{font-size:13.5px;font-weight:500}
   .dz-sub{font-size:11.5px;color:var(--faint)}
-  .imp-preview{margin-top:14px;border-top:1px solid var(--line-soft);padding-top:14px}
+  .imp-preview{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:12px 0 4px}
   .imp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
   .imp-card{background:var(--paper);border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px}
   .imp-card .k{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);font-weight:600}
@@ -192,22 +196,16 @@
     <p class="sub">Escolha o mês no topo. Clique no título de uma coluna para ordenar por ela. Despesas no cartão e pagamentos de fatura ficam separados: Pagamentos de cartão mostra quanto você pagou de fatura, sem se misturar com o que você comprou.</p>
   </header>
 
-  <section class="importar" id="importar">
-    <div class="imp-titulo">Importar extrato e faturas</div>
-    <div class="imp-sub">Solte o extrato do PicPay em CSV ou a fatura de cartão em PDF (Mercado Pago ou Porto). Os lançamentos entram já classificados pelas suas regras, e você confere o resumo contra o total da fatura antes de confirmar. Nada é gravado sem a sua confirmação.</div>
-    <label class="dropzone" id="dropzone">
-      <input type="file" id="file-extrato" accept=".csv,.pdf" hidden>
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4m0 0 4 4m-4-4L8 8"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-      <span class="dz-txt">Solte o CSV ou a fatura em PDF aqui, ou toque para escolher</span>
-      <span class="dz-sub">Extrato do PicPay em CSV, ou fatura do Mercado Pago ou da Porto em PDF</span>
-    </label>
-    <div class="imp-preview" id="imp-preview" hidden></div>
-  </section>
-
   <div class="months">
     <span class="lbl">Mês</span>
     <div class="segmes" id="segmes"></div>
+    <label class="dz-mini" id="dropzone" title="Extrato do PicPay em CSV, ou fatura do Mercado Pago ou da Porto em PDF. Você confere antes de gravar.">
+      <input type="file" id="file-extrato" accept=".csv,.pdf" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 16V4m0 0 4 4m-4-4L8 8"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      Importar CSV ou fatura
+    </label>
   </div>
+  <div class="imp-preview" id="imp-preview" hidden></div>
 
   <section class="summary">
     <div class="stat"><div class="k">Despesas do mês</div><div class="v" id="s-out">—</div></div>
