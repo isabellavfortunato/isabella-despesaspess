@@ -133,11 +133,13 @@
   .graf-tog{font-family:inherit;font-size:12px;font-weight:600;color:var(--muted);background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:5px 14px;cursor:pointer}
   .graf-tog.on{background:var(--green);color:#fff;border-color:var(--green)}
   .graf-body{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:24px}
-  .bar-chart{display:flex;align-items:flex-end;gap:8px;width:100%;overflow-x:auto;padding:6px 2px 0}
-  .bar-col{flex:0 0 46px;height:216px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px}
-  .bar-val{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
-  .bar{width:30px;border-radius:6px 6px 0 0;min-height:3px}
-  .bar-name{font-size:10px;line-height:1.15;color:var(--ink);text-align:center;height:30px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .bar-chart{display:flex;flex-direction:column;gap:8px;width:100%;padding:4px 0}
+  .hbar-row{display:grid;grid-template-columns:116px 1fr auto;align-items:center;gap:10px;font-size:12.5px}
+  .hbar-name{text-align:right;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hbar-track{background:var(--line-soft);border-radius:999px;height:16px;overflow:hidden}
+  .hbar-fill{height:100%;border-radius:999px;min-width:3px}
+  .hbar-val{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;font-size:11.5px}
+  @media(max-width:560px){.hbar-row{grid-template-columns:92px 1fr auto;font-size:12px}}
   .addcat{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
   .addcat input{border:1px solid var(--line);border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;outline:0;min-width:200px}
   .addcat input:focus{border-color:var(--indigo)}
@@ -595,12 +597,12 @@ function renderPie(){
   if(modo==="barra"){
     const max=entries[0][1]||1;
     const cols=entries.map(([cat,val])=>{
-      const h=Math.max(3,Math.round(val/max*150));
+      const w=Math.max(2,Math.round(val/max*100));
       const pct=Math.round(val/total*100);
-      return `<div class="bar-col" title="${esc(cat)}: ${money(val)} · ${pct}%">
-        <div class="bar-val">${money(val)}</div>
-        <div class="bar" style="height:${h}px;background:${colorFor(cat)}"></div>
-        <div class="bar-name">${esc(cat)}</div>
+      return `<div class="hbar-row" title="${esc(cat)}: ${money(val)} · ${pct}%">
+        <div class="hbar-name">${esc(cat)}</div>
+        <div class="hbar-track"><div class="hbar-fill" style="width:${w}%;background:${colorFor(cat)}"></div></div>
+        <div class="hbar-val">${money(val)} · ${pct}%</div>
       </div>`;
     }).join("");
     corpo=`<div class="graf-body"><div class="bar-chart">${cols}</div></div>`;
