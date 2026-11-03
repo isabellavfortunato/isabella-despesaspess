@@ -167,6 +167,12 @@
   .fat-tabela tr:last-child td{border-bottom:none}
   .rec-ok{color:var(--green);font-weight:600}
   .rec-alerta{color:var(--clay);font-weight:600}
+
+  .rel-panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:0 0 6px}
+  .rel-row{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap}
+  .rel-row label{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);font-weight:600}
+  .rel-row input[type=date]{font-family:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--paper);color:var(--ink)}
+  .rel-msg{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.45}
 </style>
 </head>
 <body>
@@ -222,6 +228,16 @@
     </label>
     <button class="btn" id="suggest">Sugerir categorias</button>
     <button class="btn primary" id="export">Exportar CSV</button>
+    <button class="btn" id="btn-relatorio">Relatório em Excel</button>
+  </div>
+
+  <div class="rel-panel" id="rel-panel" hidden>
+    <div class="rel-row">
+      <label>De <input type="date" id="rel-de"></label>
+      <label>Até <input type="date" id="rel-ate"></label>
+      <button class="btn primary" id="rel-gerar">Baixar Excel</button>
+    </div>
+    <div class="rel-msg" id="rel-msg">O relatório inclui o resumo e a lista de lançamentos do período, já sem o que você marcou como ignorado.</div>
   </div>
 
   <section class="totals">
@@ -931,7 +947,60 @@ async function lerFaturaPdf(file){
   }catch(e){box.innerHTML='<div class="imp-msg">'+esc(e.message||"Não consegui ler esta fatura.")+'</div>';}
 }
 
-(async function(){await load();rebuildDados();aplicarAprendido();buildMonths();updateSort();bindImport();renderAll();})();
+
+/* ---------- Relatório em Excel por período ---------- */
+const XLSX_URL="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+let _xlsxP=null;
+function carregarXLSX(){
+  if(window.XLSX)return Promise.resolve(window.XLSX);
+  if(_xlsxP)return _xlsxP;
+  _xlsxP=new Promise((res,rej)=>{const sc=document.createElement("script");sc.src=XLSX_URL;sc.onload=()=>res(window.XLSX);sc.onerror=()=>rej(new Error("Não consegui carregar o gerador de Excel. Confira a conexão."));document.head.appendChild(sc);});
+  return _xlsxP;
+}
+function fmtBR(d){const p=d.split("-");return p[2]+"/"+p[1]+"/"+p[0];}
+function tipoLanc(t){if(ehInterno(t))return "Interno (cofrinho)";if(t.fonte==="Pagamento")return "Pagamento de cartão";return t.valor<0?"Despesa":"Entrada";}
+function formaLanc(t){if(ehInterno(t))return "Cofrinho";if(t.fonte==="Pagamento")return "Pagamento "+(t.cartao||"");if(t.fonte==="Cartão")return "Cartão "+(t.cartao||"");return "Pix";}
+async function gerarRelatorio(de,ate){
+  const msg=document.getElementById("rel-msg");
+  if(!de||!ate){msg.textContent="Escolha as duas datas, de e até.";return;}
+  if(de>ate){const x=de;de=ate;ate=x;}
+  let XLSX; try{ XLSX=await carregarXLSX(); }catch(e){ msg.textContent=e.message; return; }
+  const itens=DADOS.filter(t=>t.data>=de&&t.data<=ate).sort((a,b)=>a.data<b.data?-1:(a.data>b.data?1:0));
+  if(!itens.length){msg.textContent="Não há lançamentos nesse período.";return;}
+  const desp=itens.filter(ehDespesa);
+  const ent=itens.filter(t=>t.valor>0&&!ehInterno(t));
+  const pag=itens.filter(t=>t.fonte==="Pagamento");
+  const somaDesp=desp.reduce((a,t)=>a+Math.abs(t.valor),0);
+  const pix=desp.filter(t=>t.fonte==="Pix").reduce((a,t)=>a+Math.abs(t.valor),0);
+  const card=desp.filter(t=>t.fonte==="Cartão").reduce((a,t)=>a+Math.abs(t.valor),0);
+  const somaPag=pag.reduce((a,t)=>a+Math.abs(t.valor),0);
+  const somaEnt=ent.reduce((a,t)=>a+t.valor,0);
+  const cats={}; desp.forEach(t=>{const c=store.cats[txid(t)]||"Sem categoria";cats[c]=(cats[c]||0)+Math.abs(t.valor);});
+  const catRows=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  const r2=v=>Math.round(v*100)/100;
+  const resumo=[["Relatório de despesas"],["Período",fmtBR(de)+" a "+fmtBR(ate)],[],
+    ["Despesas do período",r2(somaDesp)],["No Pix",r2(pix)],["Compras no cartão",r2(card)],["Pago em cartão",r2(somaPag)],["Entradas",r2(somaEnt)],[],
+    ["Despesas por categoria",""]].concat(catRows.map(r=>[r[0],r2(r[1])]));
+  const ws1=XLSX.utils.aoa_to_sheet(resumo); ws1["!cols"]=[{wch:28},{wch:22}];
+  const linhas=[["Data","Estabelecimento","Categoria","Forma","Tipo","Valor"]].concat(itens.map(t=>[
+    fmtBR(t.data),t.destino,(ehDespesa(t)?(store.cats[txid(t)]||""):""),formaLanc(t),tipoLanc(t),t.valor]));
+  const ws2=XLSX.utils.aoa_to_sheet(linhas); ws2["!cols"]=[{wch:12},{wch:42},{wch:18},{wch:16},{wch:18},{wch:12}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws1,"Resumo");
+  XLSX.utils.book_append_sheet(wb,ws2,"Lançamentos");
+  XLSX.writeFile(wb,"Relatório despesas "+fmtBR(de).replace(/\//g,"-")+" a "+fmtBR(ate).replace(/\//g,"-")+".xlsx");
+  msg.textContent="Relatório gerado com "+itens.length+" lançamentos. Veja no seu aparelho.";
+}
+function bindRelatorio(){
+  const b=document.getElementById("btn-relatorio"), pan=document.getElementById("rel-panel");
+  if(!b||!pan)return;
+  b.addEventListener("click",()=>{pan.hidden=!pan.hidden;
+    if(!pan.hidden){const ds=DADOS.map(t=>t.data).sort();const de=document.getElementById("rel-de"),ate=document.getElementById("rel-ate");
+      if(ds.length){if(!de.value)de.value=ds[0];if(!ate.value)ate.value=ds[ds.length-1];}}});
+  document.getElementById("rel-gerar").addEventListener("click",()=>gerarRelatorio(document.getElementById("rel-de").value,document.getElementById("rel-ate").value));
+}
+
+(async function(){await load();rebuildDados();aplicarAprendido();buildMonths();updateSort();bindImport();bindRelatorio();renderAll();})();
 </script>
 </body>
 </html>
